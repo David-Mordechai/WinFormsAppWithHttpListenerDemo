@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Threading.Tasks;
 using System.Windows.Forms;
 using WinFormsApp.Dtos;
 using WinFormsApp.Services;
@@ -12,16 +13,24 @@ namespace WinFormsApp
         {
             var httpGetBitStatusService =
                 new HttpGetBitStatusService<BitStatusDto>(port: 8080);
-            httpGetBitStatusService.Start(callBack: OnGetBitRequest);
+
+            httpGetBitStatusService.Start(
+                powerBitCallBack: OnPowerBitCallBack,
+                continuousBitCallBack: OnContinuousBitCallBack);
 
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
             Application.Run(new Form1());
         }
 
-        private static BitStatusDto OnGetBitRequest(string port)
+        private static BitStatusDto OnPowerBitCallBack(string port)
         {
             return new BitStatusDto {PowerBitStatus = "Go"};
+        }
+
+        private static BitStatusDto OnContinuousBitCallBack(string port)
+        {
+            return new BitStatusDto {PowerBitStatus = "NoGo"};
         }
     }
 }

@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Net;
 using System.Text;
 using System.Threading.Tasks;
@@ -9,54 +10,78 @@ namespace WinFormsApp.Services
     internal class HttpGetBitStatusService<T>
     {
         private readonly int _port;
-        private Func<string, T> _callBack;
+        private Func<string, T> _powerBitCallBack;
+        private Func<string, T> _continuousBitCallBack;
         private readonly HttpListener _listener = new HttpListener();
+        private readonly BlockingCollection<HttpListenerContext> _queue = new BlockingCollection<HttpListenerContext>();
 
         public HttpGetBitStatusService(int port)
         {
             _port = port;
         }
 
-        public void Start(Func<string, T> callBack)
+        public void Start(Func<string, T> powerBitCallBack, Func<string, T> continuousBitCallBack)
         {
-            _callBack = callBack;
-            _listener.Prefixes.Add($"http://localhost:{_port}/");
+            _powerBitCallBack = powerBitCallBack;
+            _continuousBitCallBack = continuousBitCallBack;
+            _listener.Prefixes.Add($"http://localhost:{_port}/powerBit/");
+            _listener.Prefixes.Add($"http://localhost:{_port}/continuousBit/");
             _listener.Start();
-            _listener.GetContextAsync().ContinueWith(ProcessRequest);
+            Task.Factory.StartNew(ProcessRequests);
+            _listener.BeginGetContext(GetContextCallback, null);
         }
 
-        private void ProcessRequest(Task<HttpListenerContext> task)
+        private void GetContextCallback(IAsyncResult ar)
         {
-            try
+            var context = _listener.EndGetContext(ar);
+            _queue.Add(context);
+            _listener.BeginGetContext(GetContextCallback, null);
+        }
+
+        private void ProcessRequests()
+        {
+            foreach (var context in _queue.GetConsumingEnumerable())
             {
-                var context = task.Result;
-                var request = context.Request;
-                var response = context.Response;
-                var port = request.QueryString["port"];
-                var result = _callBack.Invoke(port);
-                var json = JsonConvert.SerializeObject(result);
-                response.StatusCode = 200;
-                response.ContentType = "application/json";
-                var buffer = Encoding.UTF8.GetBytes(json);
-                response.ContentLength64 = buffer.Length;
-                var output = response.OutputStream;
-                output.Write(buffer, 0, buffer.Length);
-                output.Close();
-            }
-            catch
-            {
-                var response = task.Result.Response;
-                response.StatusCode = 500;
-                response.ContentType = "application/json";
-                var buffer = Encoding.UTF8.GetBytes("{\"error\":\"An error occurred\"}");
-                response.ContentLength64 = buffer.Length;
-                var output = response.OutputStream;
-                output.Write(buffer, 0, buffer.Length);
-                output.Close();
-            }
-            finally
-            {
-                _listener.GetContextAsync().ContinueWith(ProcessRequest);
+                try
+                {
+                    var request = context.Request;
+                    var response = context.Response;
+                    if (!request.Url.AbsolutePath.EndsWith("/"))
+                    {
+                        response.StatusCode = (int)HttpStatusCode.BadRequest;
+                        response.Close();
+                        continue;
+                    }
+                    var port = request.QueryString["port"];
+                    T result;
+                    switch (request.Url.AbsolutePath)
+                    {
+                        case "/powerBit/":
+                            result = _powerBitCallBack.Invoke(port);
+                            break;
+                        case "/continuousBit/":
+                            result = _continuousBitCallBack.Invoke(port);
+                            break;
+                        default:
+                            response.StatusCode = (int)HttpStatusCode.NotFound;
+                            response.Close();
+                            continue;
+                    }
+                    var json = JsonConvert.SerializeObject(result);
+                    response.StatusCode = (int)HttpStatusCode.OK;
+                    response.ContentType = "application/json";
+                    var buffer = Encoding.UTF8.GetBytes(json);
+                    response.ContentLength64 = buffer.Length;
+                    var output = response.OutputStream;
+                    output.Write(buffer, 0, buffer.Length);
+                    output.Close();
+                }
+                catch
+                {
+                    var response = context.Response;
+                    response.StatusCode = (int)HttpStatusCode.InternalServerError;
+                    response.Close();
+                }
             }
         }
     }
