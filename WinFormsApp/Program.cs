@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Threading.Tasks;
 using System.Windows.Forms;
 using WinFormsApp.Dtos;
 using WinFormsApp.Services;
@@ -11,12 +10,9 @@ namespace WinFormsApp
         [STAThread]
         private static void Main()
         {
-            var httpGetBitStatusService =
-                new HttpGetBitStatusService<BitStatusDto>(port: 8080);
-
-            httpGetBitStatusService.Start(
-                powerBitCallBack: OnPowerBitCallBack,
-                continuousBitCallBack: OnContinuousBitCallBack);
+            const int port = 8080;
+            var httpBitStatusService = new HttpBitStatusService($"http://localhost:{port}");
+            httpBitStatusService.Start(OnPowerBitCallBack, OnContinuousBitCallBack);
 
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);

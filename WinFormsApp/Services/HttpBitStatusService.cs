@@ -4,36 +4,37 @@ using System.Net;
 using System.Text;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
+using WinFormsApp.Dtos;
 
 namespace WinFormsApp.Services
 {
-    internal class HttpGetBitStatusService<T>
+    internal class HttpBitStatusService
     {
-        private readonly int _port;
-        private Func<string, T> _powerBitCallBack;
-        private Func<string, T> _continuousBitCallBack;
+        private readonly string _url;
+        private Func<string, BitStatusDto> _powerBitCallBack;
+        private Func<string, BitStatusDto> _continuousBitCallBack;
         private readonly HttpListener _listener = new HttpListener();
         private readonly BlockingCollection<HttpListenerContext> _queue = new BlockingCollection<HttpListenerContext>();
 
-        public HttpGetBitStatusService(int port)
+        public HttpBitStatusService(string url)
         {
-            _port = port;
+            _url = url;
         }
 
-        public void Start(Func<string, T> powerBitCallBack, Func<string, T> continuousBitCallBack)
+        public void Start(Func<string, BitStatusDto> powerBitCallBack, Func<string, BitStatusDto> continuousBitCallBack)
         {
             _powerBitCallBack = powerBitCallBack;
             _continuousBitCallBack = continuousBitCallBack;
-            _listener.Prefixes.Add($"http://localhost:{_port}/powerBit/");
-            _listener.Prefixes.Add($"http://localhost:{_port}/continuousBit/");
+            _listener.Prefixes.Add($"{_url}/powerBit/");
+            _listener.Prefixes.Add($"{_url}/continuousBit/");
             _listener.Start();
             Task.Factory.StartNew(ProcessRequests);
             _listener.BeginGetContext(GetContextCallback, null);
         }
 
-        private void GetContextCallback(IAsyncResult ar)
+        private void GetContextCallback(IAsyncResult asyncResult)
         {
-            var context = _listener.EndGetContext(ar);
+            var context = _listener.EndGetContext(asyncResult);
             _queue.Add(context);
             _listener.BeginGetContext(GetContextCallback, null);
         }
@@ -46,28 +47,31 @@ namespace WinFormsApp.Services
                 {
                     var request = context.Request;
                     var response = context.Response;
+                    
                     if (!request.Url.AbsolutePath.EndsWith("/"))
                     {
                         response.StatusCode = (int)HttpStatusCode.BadRequest;
                         response.Close();
                         continue;
                     }
+
+                    string json;
                     var port = request.QueryString["port"];
-                    T result;
+
                     switch (request.Url.AbsolutePath)
                     {
                         case "/powerBit/":
-                            result = _powerBitCallBack.Invoke(port);
+                            json = JsonConvert.SerializeObject(_powerBitCallBack.Invoke(port));
                             break;
                         case "/continuousBit/":
-                            result = _continuousBitCallBack.Invoke(port);
+                            json = JsonConvert.SerializeObject(_continuousBitCallBack.Invoke(port));
                             break;
                         default:
                             response.StatusCode = (int)HttpStatusCode.NotFound;
                             response.Close();
                             continue;
                     }
-                    var json = JsonConvert.SerializeObject(result);
+                    
                     response.StatusCode = (int)HttpStatusCode.OK;
                     response.ContentType = "application/json";
                     var buffer = Encoding.UTF8.GetBytes(json);
