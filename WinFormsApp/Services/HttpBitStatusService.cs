@@ -58,12 +58,12 @@ namespace WinFormsApp.Services
                     string json;
                     var port = request.QueryString["port"];
 
-                    switch (request.Url.AbsolutePath)
+                    switch (request.Url.AbsolutePath.ToLower())
                     {
-                        case "/powerBit/":
+                        case "/powerbit/":
                             json = JsonConvert.SerializeObject(_powerBitCallBack.Invoke(port));
                             break;
-                        case "/continuousBit/":
+                        case "/continuousbit/":
                             json = JsonConvert.SerializeObject(_continuousBitCallBack.Invoke(port));
                             break;
                         default:
