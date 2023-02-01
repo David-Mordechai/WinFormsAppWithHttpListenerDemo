@@ -1,3 +1,6 @@
 # WinFormsAppWithHttpListenerDemo
 
-## Implentation of simple http listener that listen on localhost:8080 to get request and returns to caller json object of BitStatusDto.
+* Start WinForms applicaiton
+* Start browser (chrome)
+* Url to get power bit status <http://localhost:8080/powerBit/?port=4001>
+* Url to get continuous bit status <http://localhost:8080/continuousBit/?port=4001>
